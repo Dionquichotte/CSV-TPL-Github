@@ -1,40 +1,39 @@
-; This AutoIt script converts CSV files
-; into TPL files which can be used by the Tecan Freedom EVO pippetting robot.
+; CSV_TPL_16.au3
+; AutoIt script for converting scan.CSV files to Tecan EVOware TPL files
 ;
-; Version 1.5, July 2014 , dion methorst : )
+; Version 1.6, Okt 2014 , dion methorst : )
 ;
-; improved filename retrieval, no more dependence on length of string
+; changelog:
+; july 2014: improved filename retrieval, no more dependance on length of string
 ;
+; Samplenames read from barcodes are retrieved from C:\APPS\EVO\CSV\scan.csv.
+; Then converted to appropriate TPL file format and written to C:\APPS\EVO\TPL\plateID.TPL (for instance)
 ;
-; in the C:\APPS\EVO\CSV\scan.csv file is converted to appropriate TPL file format and written to C:\APPS\EVO\TPL\DPW851.TPL (for instance)
-; scan.csv file format is as displayed in example below and should always have exactly the same number of lines, where all lines between the 1st and last line
-;
+; *******************************************************************************************************************************
+; 	scan.csv file format
 ;
 ;	F411F711
-;	1;1;1;Tube 13*75mm 16 Pos;tube1;013/509677;A0-01
-;	1;1;2;Tube 13*75mm 16 Pos;tube1;013/509677;A0-02
-;	1;1;3;Tube 13*75mm 16 Pos;tube1;013/509677;A0-03
-;	1;1;4;Tube 13*75mm 16 Pos;tube1;013/509677;A0-04
-;	1;1;5;Tube 13*75mm 16 Pos;tube1;013/509677;A0-05
-;	1;1;6;Tube 13*75mm 16 Pos;tube1;013/509677;A0-06
-;	1;1;7;Tube 13*75mm 16 Pos;tube1;013/509677;A0-07
-;	1;1;8;Tube 13*75mm 16 Pos;tube1;013/509677;A0-08
-;	1;1;9;Tube 13*75mm 16 Pos;tube1;013/509677;A0-09
-;	1;1;10;Tube 13*75mm 16 Pos;tube1;013/509677;A0-10
+;	1;1;1;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_1
+;	1;1;2;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_2
+;	1;1;3;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_3
+;	1;1;4;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_4
+;	1;1;5;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_5
+;	1;1;6;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_6
+;	1;1;7;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_7
+;	1;1;8;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_8
+;	1;1;9;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_9
+;	1;1;10;Tube 13*75mm 16 Pos;tube1;013/509677;Sample_10
 ;	1;1;11;Tube 13*75mm 16 Pos;tube1;013/509677;$$$
 ;	1;1;12;Tube 13*75mm 16 Pos;tube1;013/509677;$$$
 ;	1;1;13;Tube 13*75mm 16 Pos;tube1;013/509677;stand
 ;	1;1;14;Tube 13*75mm 16 Pos;tube1;013/509677;$$$
 ;	1;1;15;Tube 13*75mm 16 Pos;tube1;013/509677;$$$
 ;	1;1;16;Tube 13*75mm 16 Pos;tube1;013/509677;$$$
-;	21;1;;96 Well DeepWell portait;Labware7;023/004256;ANYNAME_ANYLENGTH
-
+;	21;1;;96 Well DeepWell portait;Labware7;023/004256;PlateID_ANYNAME_ANYLENGTH
 ; *******************************************************************************************************************************
-
-
-
+;
 ; start of script
-
+;
 ;include library files for <related> functions
 #include <Array.au3>
 #include <file.au3>
@@ -112,26 +111,37 @@ Func _ParseCSV($sFile, $sDelimiters=';', $sQuote='"', $iFormat=0)
 	Return $aResult
 EndFunc
 
-$protocol = 100 								; or  for GUI use ; inputbox("Tecan LIMS-nummer invoeren", "voer het Tecan EVO LIMS-nummer in")
+$protocol = 100
 
-;$FolderPath = "C:\Program Files\Tecan\EVOware\output\"
-$FolderPath = "C:\APPS\EVO\CSV\" ; for testing on non evo pc's
+Select	; determine Windows OS version to select path of Evoware Trace.txt
+	Case @OSVersion = "WIN_81" OR "WIN_8" OR "WIN_7" OR "WIN_VISTA"
+		$FolderPath = "C:\ProgramData\Tecan\EVOware\output\"
+		;$FolderPath = "C:\APPS\EVO\CSV\" ; for testing on non evo pc's
+		$FileNam2 = "scan.csv"
+$var = $FolderPath &$FileNam2
+	Case @OSVersion = "WIN_XP"
+		$FolderPath = "C:\Program Files\Tecan\EVOware\output\"
+		;$FolderPath = "C:\APPS\EVO\CSV\" ; for testing on non evo pc's
+		$FileNam2 = "scan.csv"
+		$var = $FolderPath &$FileNam2
+EndSelect
+
+$FolderPath = "C:\ProgramData\Tecan\EVOware\output\"
+;$FolderPath = "C:\APPS\EVO\CSV\" ; for testing on non evo pc's
 $FileNam2 = "scan.csv"
 $var = $FolderPath &$FileNam2
 
 $GetName = FileReadline($var, -1)											; the contents of the last line of the csv-file read into a string
-$filename = StringTrimleft ( $GetName,StringInStr($GetName,";",0,-1))		; edit the length of the filename by changing the number between {..}
-
+$filename = StringTrimleft ( $GetName,StringInStr($GetName,";",0,-1))		;
    If FileExists($var) Then
-	   $TPL = FileOpen("C:\apps\EVO\TPL\" & $filename & ".TPL", 2 + 8)	; TPL file creation
+	   $TPL = FileOpen("C:\apps\EVO\TPL\" & $filename & ".tpl", 2 + 8)	; TPL file creation
 	  Else
-		 ;MsgBox(4096, $var, "Scan.csv does NOT exist in folder:" & @CRLF & @CRLF & "C:\Program Files\Tecan\EVOware\output\")
-		 MsgBox(4096, $var, "Scan.csv does NOT exist in folder:" & @CRLF & @CRLF & "C:\apps\EVO\CSV")
+		 MsgBox(4096, $var, "Scan.csv does NOT exist in folder:" & @CRLF & @CRLF & "C:\ProgramData\Tecan\EVOware\output\")
+		 ;MsgBox(4096, $var, "Scan.csv does NOT exist in folder:" & @CRLF & @CRLF & "C:\apps\EVO\CSV")
 	  EndIf
 
 $Names = _ParseCSV($var, ";", '$', 4)
-;_ArrayDisplay($Names)
-
+	;_ArrayDisplay($Names) ; for testing purposes
     _ArrayDelete($Names, 17)
 	_ArrayDelete($Names , 16)
 	_ArrayDelete($Names , 15)
@@ -140,23 +150,18 @@ $Names = _ParseCSV($var, ";", '$', 4)
 	_ArrayDelete($Names , 12)
 	_ArrayDelete($Names , 11)
 	_ArrayDelete($Names , 0)
-
-_ArrayDisplay($Names) ; display the edited array, disable before compiling to exe!
+	;_ArrayDisplay($Names) ; for testing purposes
 
 for $Trim = 0 to 9
 
 	$Names[$Trim][0] = StringTrimleft ( $Names[$Trim][0],StringInStr($Names[$Trim][0],";",0,-1))
 
 next
-_ArrayDisplay($Names) ; display the edited array, disable before compiling to exe!
-
+;_ArrayDisplay($Names) ; for testing puposes
 
 ; START of the main loop to write the samplenumbers extracted from the $Names array with the corresponding plateposition & dilutionprotocol
-
-For $Write = 0 To 9 							;Ubound($Names)-1 ; counts the elements of the array in all dimensions (=rows, colums, cows, pigs, other stuff...)
-
-												; Write TPL file line by line
-
+For $Write = 0 To 9 							;Ubound($Names)-1
+												;Write TPL file line by line
 		For $Cycle = 1 to 8
 
 		Select
@@ -196,9 +201,7 @@ For $Write = 0 To 9 							;Ubound($Names)-1 ; counts the elements of the array 
 	  next
 Next
 
-For $STD = 0 To 1
-
-	; Write TPL file line by line for standards and blank
+For $STD = 0 To 1 ; Write TPL file line by line for standards and blank
 
 		For $Cycle2 = 1 to 8
 
@@ -247,7 +250,6 @@ fileclose($TPL)
 FileClose($var)
 ;FileMove("C:\Program Files\Tecan\EVOware\output" & "\*.TPL", "C:\apps\EVO\TPL" & "\*.TPL", 9)
 ;FileMove("C:\apps\EVO\CSV" & "\*.TPL", "C:\apps\EVO\TPL" & "\*.TPL", 9)
-
 ;MsgBox(4096, $var, "CSV file converted to TPL and written to C:\apps\EVO\TPL" & @CRLF & @CRLF & "")
 
 $message = ""
